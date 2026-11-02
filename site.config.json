@@ -1,7 +1,7 @@
 {
   "siteUrl": "https://chopper-run.vercel.app",
   "gaId": "G-EZT4MQPBQX",
-  "sentryDsn": "",
+  "sentryDsn": "https://b009838d8b486e7b5abc45a146b4ca1f@o4511678609620993.ingest.de.sentry.io/4512364258197584",
   "gameMonetizeId": "4dl6zmzupl5yktcr80kqg55iybw7ano8",
   "contactEmail": "you@example.com",
   "_help": {

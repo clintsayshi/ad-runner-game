@@ -56,8 +56,12 @@ window.SITE = { gaId: "__GA_ID__", sentryDsn: "__SENTRY_DSN__", gmId: "__GM_ID__
   if (set(SITE.sentryDsn)){
     window.sentryOnLoad = function(){ Sentry.init({ dsn: SITE.sentryDsn, release: SITE.version, sampleRate: 1, tracesSampleRate: 0 }); };
     var key = SITE.sentryDsn.replace(/^https?:\/\//, '').split('@')[0];
-    var s = document.createElement('script'); s.src = 'https://js.sentry-cdn.com/' + key + '.min.js'; s.crossOrigin = 'anonymous'; s.async = true;
+    // the loader lives on the account's region: ingest.de.sentry.io -> js-de.sentry-cdn.com
+    var region = (SITE.sentryDsn.match(/\.ingest\.([a-z]{2})\.sentry\.io\//) || [])[1];
+    var s = document.createElement('script'); s.src = 'https://js' + (region ? '-' + region : '') + '.sentry-cdn.com/' + key + '.min.js'; s.crossOrigin = 'anonymous'; s.async = true;
     document.head.appendChild(s);
+    // add ?sentry-test to the URL to send one test error
+    if (/[?&]sentry-test\b/.test(location.search)) setTimeout(function(){ throw new Error('Sentry test error from Chopper Run'); }, 3000);
   }
   // -- Google Analytics 4 with Consent Mode: nothing is stored until the player says yes
   window.dataLayer = window.dataLayer || [];
