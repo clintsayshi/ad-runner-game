@@ -1,0 +1,12 @@
+{
+  "siteUrl": "https://example.com",
+  "gaId": "",
+  "sentryDsn": "",
+  "contactEmail": "you@example.com",
+  "_help": {
+    "siteUrl": "Your real web address, no slash at the end, e.g. https://chopperrun.com",
+    "gaId": "Google Analytics 4 Measurement ID, looks like G-ABC123XYZ. Leave empty to turn analytics off.",
+    "sentryDsn": "Sentry DSN from Project Settings > Client Keys, looks like https://abc123@o000.ingest.sentry.io/000. Leave empty to turn error monitoring off.",
+    "contactEmail": "Shown on the privacy page so players can reach you."
+  }
+}
