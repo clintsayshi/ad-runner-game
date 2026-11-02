@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://chopper-run.vercel.app/sitemap.xml

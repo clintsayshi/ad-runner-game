@@ -132,4 +132,20 @@ text("Run. Hide. Drive. Survive.", -5.4, -1.15, 0.46, WHITE, align="LEFT", bold=
 text("Free in your browser", -5.4, -1.75, 0.34, GOLD, align="LEFT", bold=False)
 scene.render.filepath = os.path.join(out, "og-image.png")
 bpy.ops.render.render(write_still=True)
+
+# ---- store thumbnails (game portals): chopper over a red sun, title along the bottom
+os.makedirs(os.path.join(out, "store"), exist_ok=True)
+for w, h in ((512, 384), (512, 340), (512, 512), (1280, 720)):
+    clear()
+    W = 8.0                    # scene width in units; height follows the aspect
+    Hh = W * h / w
+    camera(w, h, W if w >= h else Hh)
+    disc(0, Hh * 0.12, Hh * 0.36, RED)
+    box(0, -Hh / 2 + Hh * 0.07, W, Hh * 0.14, ROAD, z=0.1)
+    for i in range(-5, 6):
+        box(i * 1.0, -Hh / 2 + Hh * 0.07, 0.45, 0.06, GOLD, z=0.15)
+    chopper(0.1, Hh * 0.2, Hh * 0.28, WHITE, tilt=-0.15)
+    text("CHOPPER RUN", 0, -Hh * 0.26, min(W * 0.11, Hh * 0.13), WHITE)
+    scene.render.filepath = os.path.join(out, "store", f"thumb-{w}x{h}.png")
+    bpy.ops.render.render(write_still=True)
 print("DONE", out)

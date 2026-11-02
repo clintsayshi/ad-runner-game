@@ -1,12 +1,14 @@
 {
-  "siteUrl": "https://example.com",
-  "gaId": "",
+  "siteUrl": "https://chopper-run.vercel.app",
+  "gaId": "G-EZT4MQPBQX",
   "sentryDsn": "",
+  "gameMonetizeId": "4dl6zmzupl5yktcr80kqg55iybw7ano8",
   "contactEmail": "you@example.com",
   "_help": {
     "siteUrl": "Your real web address, no slash at the end, e.g. https://chopperrun.com",
     "gaId": "Google Analytics 4 Measurement ID, looks like G-ABC123XYZ. Leave empty to turn analytics off.",
     "sentryDsn": "Sentry DSN from Project Settings > Client Keys, looks like https://abc123@o000.ingest.sentry.io/000. Leave empty to turn error monitoring off.",
+    "gameMonetizeId": "Game ID from the GameMonetize control panel (Game Management > your game). Leave empty to use the built-in house ad.",
     "contactEmail": "Shown on the privacy page so players can reach you."
   }
 }

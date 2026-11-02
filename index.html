@@ -37,9 +37,21 @@
 <link rel="preload" href="assets/character/hero.glb" as="fetch" crossorigin>
 <!-- ===== analytics + error monitoring: both stay off until their IDs are set in site.config.json ===== -->
 <script>
-window.SITE = { gaId: "__GA_ID__", sentryDsn: "__SENTRY_DSN__", version: "__VERSION__" };
+window.SITE = { gaId: "__GA_ID__", sentryDsn: "__SENTRY_DSN__", gmId: "__GM_ID__", version: "__VERSION__" };
 (function(){
   var set = function(v){ return v && v.indexOf('__') !== 0; };
+  // -- GameMonetize ads SDK. The game listens through GM.listeners; it can pause the game at any time.
+  window.GM = { ready: false, playing: false, listeners: [] };
+  if (set(SITE.gmId)){
+    window.SDK_OPTIONS = { gameId: SITE.gmId, onEvent: function(a){
+      if (a.name === 'SDK_READY') GM.ready = true;
+      if (a.name === 'SDK_GAME_PAUSE') GM.playing = true;
+      if (a.name === 'SDK_GAME_START') GM.playing = false;
+      GM.listeners.forEach(function(f){ try { f(a.name); } catch (e) {} });
+    } };
+    var m = document.createElement('script'); m.id = 'gamemonetize-sdk'; m.src = 'https://api.gamemonetize.com/sdk.js'; m.async = true;
+    document.head.appendChild(m);
+  }
   // -- error monitoring (Sentry). Errors before it loads are queued and sent once it is ready.
   if (set(SITE.sentryDsn)){
     window.sentryOnLoad = function(){ Sentry.init({ dsn: SITE.sentryDsn, release: SITE.version, sampleRate: 1, tracesSampleRate: 0 }); };
@@ -315,9 +327,9 @@ function togglePause(){
 //  sound (synthesized)
 // ======================================================================
 const sfx = (() => {
-  let ac = null, master = null, rotorGain = null, noiseBuf = null, muted = false;
+  let ac = null, master = null, rotorGain = null, noiseBuf = null, muted = false, held = false;
   function init(){
-    if (ac){ if (!muted) ac.resume(); return; }
+    if (ac){ if (!muted && !held) ac.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     ac = new AC(); master = ac.createGain(); master.gain.value = 0.8; master.connect(ac.destination);
     noiseBuf = ac.createBuffer(1, ac.sampleRate*0.8, ac.sampleRate);
@@ -391,7 +403,9 @@ const sfx = (() => {
     shift(){ tone(220, 140, 0.06, 0.12, 'square'); },
     bump(){ noise(0.12, 0.35, 500); },
     crash(v){ noise(0.5, clamp(0.4 + v*0.04, 0.4, 1), 900); tone(300, 60, 0.3, 0.18, 'sawtooth'); },
-    toggleMute(){ muted = !muted; if (ac) muted ? ac.suspend() : ac.resume(); if (S) say(muted ? 'Sound off' : 'Sound on', 1); },
+    toggleMute(){ muted = !muted; if (ac) (muted || held) ? ac.suspend() : ac.resume(); if (S) say(muted ? 'Sound off' : 'Sound on', 1); },
+    // silence everything while a video ad plays (ads must not play over game sound)
+    hold(on){ held = on; if (!ac) return; if (on) ac.suspend(); else if (!muted) ac.resume(); },
   };
 })();
 
@@ -2686,26 +2700,35 @@ const ADS = [
   ["MEGA BURGER", "Double stack. Triple sauce.", "#f90", "#222"],
   ["PIXEL PHONE X", "Now with 9 cameras.", "#222", "#0ff"],
 ];
+// GameMonetize can pause the game at any moment (its own pre-roll, or the ad we ask for).
+// SDK_GAME_PAUSE: freeze and go silent. SDK_GAME_START: the ad is over, carry on.
+let adDone = null, gmPaused = false;
+if (typeof window !== 'undefined' && window.GM) GM.listeners.push(name => {
+  if (name === 'SDK_GAME_PAUSE'){
+    sfx.hold(true); clearKeys();
+    if (running && S && !S.paused){ S.paused = true; gmPaused = true; }
+  } else if (name === 'SDK_GAME_START'){
+    sfx.hold(false);
+    if (adDone){ const f = adDone; adDone = null; f(); }
+    else if (gmPaused){ gmPaused = false; S.paused = false; last = performance.now(); }
+  }
+});
 function showAd(){
   S.paused = true;
   clearKeys(); sfx.rotor(1e9); sfx.engine(0, 0, false); sfx.screech(0);
   if (document.exitPointerLock) document.exitPointerLock();
-  const ad = ADS[S.ads % ADS.length];
-  let left = Math.min(20, 8 + S.ads*4);          // each ad is longer than the last
-  const el = document.getElementById('ad'), box = document.getElementById('adBox'), tm = document.getElementById('adTimer');
-  box.style.background = ad[2]; box.style.color = ad[3];
-  box.innerHTML = `<div>${ad[0]}<div style="font-size:18px;font-weight:normal;margin-top:10px">${ad[1]}</div></div>`;
-  tm.textContent = `Regaining strength... ${left}s`;
-  el.classList.remove('hidden');
-  // HOOK: swap this timer for a real rewarded-ad SDK call; call done() when it reports "completed".
-  const iv = setInterval(() => {
-    left--;
-    box.style.transform = `scale(${1 + (left % 2)*0.04})`;
-    tm.textContent = `Regaining strength... ${left}s`;
-    if (left <= 0){ clearInterval(iv); done(); }
-  }, 1000);
+  // real video ad from GameMonetize when the SDK is ready; the house ad below if not,
+  // or if no ad arrives within 4 s (no ad to show right now)
+  if (window.GM && GM.ready && window.sdk && typeof sdk.showBanner === 'function'){
+    const noFill = setTimeout(() => { if (adDone && !GM.playing){ adDone = null; houseAd(); } }, 4000);
+    adDone = () => { clearTimeout(noFill); done(); };
+    track('ad_request');
+    try { sdk.showBanner(); } catch (e) { clearTimeout(noFill); adDone = null; houseAd(); }
+    return;
+  }
+  houseAd();
   function done(){
-    el.classList.add('hidden');
+    document.getElementById('ad').classList.add('hidden');
     S.ads++; S.lastAd = S.t; track('ad_watched', { count: S.ads, level: S.level });
     P.hp = Math.max(P.hp, 75); P.st = 100; P.inv = 2.5;
     for (const h of helis){ const a = Math.atan2(h.y - P.y, h.x - P.x); h.x = P.x + Math.cos(a)*40; h.y = P.y + Math.sin(a)*40; }
@@ -2714,6 +2737,22 @@ function showAd(){
     bullets = []; rockets = [];
     S.paused = false; last = performance.now();
     say('Strength restored! GO!');
+  }
+  function houseAd(){
+  const ad = ADS[S.ads % ADS.length];
+  let left = Math.min(20, 8 + S.ads*4);          // each ad is longer than the last
+  const el = document.getElementById('ad'), box = document.getElementById('adBox'), tm = document.getElementById('adTimer');
+  box.style.background = ad[2]; box.style.color = ad[3];
+  box.innerHTML = `<div>${ad[0]}<div style="font-size:18px;font-weight:normal;margin-top:10px">${ad[1]}</div></div>`;
+  tm.textContent = `Regaining strength... ${left}s`;
+  el.classList.remove('hidden');
+  // house ad: a timed fake ad, used when no real ad is available
+  const iv = setInterval(() => {
+    left--;
+    box.style.transform = `scale(${1 + (left % 2)*0.04})`;
+    tm.textContent = `Regaining strength... ${left}s`;
+    if (left <= 0){ clearInterval(iv); done(); }
+  }, 1000);
   }
 }
 

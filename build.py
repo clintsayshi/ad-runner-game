@@ -43,7 +43,10 @@ def load_config():
     dsn = cfg.get("sentryDsn", "").strip()
     if dsn and not re.match(r"^https://[0-9a-f]+@[\w.-]+/\d+$", dsn):
         fail(f"sentryDsn must look like https://<key>@o0.ingest.sentry.io/<id> (got {dsn!r})")
-    return url, ga, dsn, cfg.get("contactEmail", "").strip()
+    gm = cfg.get("gameMonetizeId", "").strip()
+    if gm and not re.match(r"^[a-z0-9]{16,64}$", gm):
+        fail(f"gameMonetizeId must be the long lowercase Game ID from GameMonetize (got {gm!r})")
+    return url, ga, dsn, gm, cfg.get("contactEmail", "").strip()
 
 
 def version():
@@ -61,9 +64,9 @@ def fill(text, subs):
 
 
 def main():
-    url, ga, dsn, email = load_config()
+    url, ga, dsn, gm, email = load_config()
     today = datetime.date.today().isoformat()
-    subs = {"__SITE_URL__": url, "__GA_ID__": ga, "__SENTRY_DSN__": dsn, "__VERSION__": version(),
+    subs = {"__SITE_URL__": url, "__GA_ID__": ga, "__SENTRY_DSN__": dsn, "__GM_ID__": gm, "__VERSION__": version(),
             "__CONTACT_EMAIL__": email or "the site owner", "__BUILD_DATE__": today}
 
     if DIST.exists():
@@ -111,19 +114,19 @@ def main():
                   {"src": "favicon.svg", "sizes": "any", "type": "image/svg+xml"}],
     }, indent=2) + "\n")
 
-    # host config: long cache for models / engine, short for pages; basic security headers
+    # host config: long cache for models / engine, short for pages; basic security headers.
+    # No X-Frame-Options: game portals (GameMonetize etc.) show the game inside an iframe.
+    # Vercel reads its settings from the repo's own vercel.json (same rules), not from dist/.
     sec = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin",
-           "X-Frame-Options": "SAMEORIGIN", "Permissions-Policy": "camera=(), microphone=(), geolocation=()"}
+           "Permissions-Policy": "camera=(), microphone=(), geolocation=()"}
     rules = [("/*", {**sec, "Cache-Control": "public, max-age=300"}),
              ("/assets/*", {"Cache-Control": "public, max-age=2592000"}),
              ("/vendor/*", {"Cache-Control": "public, max-age=31536000, immutable"})]
     (DIST / "_headers").write_text("".join(f"{path}\n" + "".join(f"  {k}: {v}\n" for k, v in h.items()) + "\n" for path, h in rules))
-    (DIST / "vercel.json").write_text(json.dumps({"cleanUrls": False, "headers": [
-        {"source": p.replace("/*", "/(.*)"), "headers": [{"key": k, "value": v} for k, v in h.items()]} for p, h in rules]}, indent=2) + "\n")
 
     size = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"build: wrote {DIST} ({size/1e6:.1f} MB) for {url}"
-          f" | analytics {'ON ' + ga if ga else 'off'} | errors {'ON' if dsn else 'off'}")
+          f" | analytics {'ON ' + ga if ga else 'off'} | errors {'ON' if dsn else 'off'} | ads {'ON' if gm else 'off'}")
     if "--check" in sys.argv:
         check()
 
